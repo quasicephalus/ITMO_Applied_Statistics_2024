@@ -1,0 +1,70 @@
+---
+title: "Untitled"
+output: html_document
+date: "2024-04-03"
+---
+```{r}
+library(vegan)
+library(ggplot2)
+library(dplyr)
+```
+
+# Loading data
+```{r}
+data(BCI)
+data("BCI.env")
+```
+
+# Summary
+
+There are only few meaningful variables in enviromental data, which are Habitat, Stream and Enviromental Heterogenity.
+
+```{r}
+summary(BCI.env)
+```
+# Data filtering
+
+There are many species with very low abundance, so we choose only those that have summary abundance greater than 10
+
+```{r}
+bci_filter <- BCI[colSums(BCI)>=10]
+```
+
+# Ordination
+```{r}
+
+ord <- metaMDS(bci_filter)
+ord_sp <- data.frame(scores(ord, display = "site"))
+nmds_df <- cbind(ord$points, BCI.env)
+
+
+ggplot(nmds_df, aes(x = MDS1, y=MDS2, col = Habitat, shape = Stream, size=EnvHet))+
+  geom_point()+
+  theme_bw()
+```
+
+```{r}
+ef <- envfit(ord, BCI.env[, c("Stream", "Habitat")])
+
+ef$vectors
+
+ef$factors
+
+```
+```{r}
+pal_col <- c("red", "green", "steelblue", 'yellow', 'pink')
+pal_sh <- c(0,1,2,3,4)
+ordiplot(ord, type = "n")
+points(ord, col = pal_col[BCI.env$Habitat], pch = pal_sh[BCI.env$Stream])
+plot(ef)
+```
+
+```{r}
+os_EnvHet <- ordisurf(ord, BCI.env$EnvHet, method = "REML")
+summary(os_EnvHet)
+```
+
+# Conclusion
+
+With distances calculated based on species abundances we examined relationship between floral composition and enviromental parameters: Stream presence, Habitat and Enviromental heterogenity. On the visualisation we can see that stream presence end heterogenity had no significant relation with species presence. However, there is significantly different clusters of species dependent of a habitat type (p=0.001). On the visualisation we can see that there are 2 big groups of habitats: Swamp+Young and Old habitats. Moreover, all 5 types of habitats are form distinct cluster and are different from each other in terms of species. 
+
