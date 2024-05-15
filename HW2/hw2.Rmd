@@ -1,0 +1,116 @@
+---
+title: "HW2"
+author: "Mikhail Filippov"
+date: "2024-05-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=FALSE, warning=FALSE}
+library(dplyr)
+library(vegan)
+library(gridExtra)
+library(ape)
+library(dendextend)
+library(pvclust)
+library(tidyr)
+library(golubEsets)
+```
+
+# Loading dataset
+
+```{r}
+data(Golub_Merge)
+golub <- data.frame(Golub_Merge)[1:7129]
+rownames(golub) <- paste(rownames(golub), Golub_Merge$ALL.AML, Golub_Merge$BM.PB, Golub_Merge$T.B.cell, sep = '_')
+```
+
+
+# Calculating distances
+```{r}
+
+euc_dist <-  vegdist(golub, method = "euclidean")
+canb_dist <- vegdist(golub, method = "canberra")
+manh_dist <- vegdist(golub, method = "manhattan")
+gow_dist<- vegdist(golub, method = "gower")
+
+```
+
+# Evaluating clustering
+```{r}
+compare_clustering_methods <- function(distances, methods) {
+  corr_df <- data.frame(
+    Method = character(0),
+    Distance = character(0),
+    Corr = numeric(0)
+  )
+  
+  for  (method in methods){
+    for (dist_name in names(distances)){
+      d <- distances[[dist_name]]
+      hs <- hclust(d, method = method)
+      cophenetic_matrix <- cophenetic(hs)
+      correlation <- cor(d, as.dist(cophenetic_matrix))
+      corr_df <- rbind(corr_df, data_frame(
+        Method = method,
+        Distance = dist_name,
+        Correlation = correlation
+      ))
+    }
+    
+  }
+  return(corr_df)
+}
+```
+
+```{r}
+distances <- list(Euclidean = euc_dist, Canberra = canb_dist, Mahattan = manh_dist, Gower = gow_dist)
+methods = c('single', 'complete', 'average', 'ward.D2')
+
+comparison_results <- spread(compare_clustering_methods(distances, methods), Distance, Correlation)
+
+comparison_results[['Mean']] <- rowMeans(comparison_results[, 2:4])
+comparison_results
+```
+```{r}
+colMeans(comparison_results[, 2:5])
+```
+Best method is average clustering (UPGMA), and it worked good with Gower and euclidean distances. Second best is single (nearest neighbour). 
+
+
+# Bootstrapping
+## Average clustering
+```{r}
+cl_boot <- pvclust(
+  t(golub),
+  method.hclust = 'average',
+  nboot = 100,
+  method.dist = 'euclidean',
+  parallel = T,
+  iseed = 13)
+```
+```{r}
+plot(cl_boot, cex = 0.7)
+```
+## Nearest neighbour clustering
+
+```{r}
+cl_boot <- pvclust(
+  t(golub),
+  method.hclust = 'single',
+  nboot = 100,
+  method.dist = 'euclidean',
+  parallel = T,
+  iseed = 13)
+```
+
+```{r}
+plot(cl_boot, cex = 0.7)
+```
+
+# Conclusion
+
+UPGMA clustering appeared to be the most meaningful, as there are distinct clusters by treatment and cell types. Nearest neighbor, on the other hand, clustered all samples in a single large cluster, which is impossible to interpret biologically.
