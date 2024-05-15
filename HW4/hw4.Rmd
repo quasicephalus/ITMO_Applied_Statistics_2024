@@ -1,0 +1,104 @@
+---
+title: "HW4"
+author: "Mikhail Filippov"
+date: '13.05.2024'
+output: html_document
+---
+
+```{r warning=F, include=FALSE}
+library(corrplot)
+library(dplyr)
+library(readxl)
+library(vegan)
+library(ggvegan)
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+# Loading data
+
+```{r}
+fauna <- read_excel('Grazing_Magierowski_et_al_2015.xls', sheet = 'fauna')
+env <- read_excel('Grazing_Magierowski_et_al_2015.xls', sheet = 'env')
+coord <- read_excel('Grazing_Magierowski_et_al_2015.xls', sheet = 'coord')
+raw <- read_excel('Grazing_Magierowski_et_al_2015.xls', sheet = 'raw', skip=1)
+```
+
+
+```{r}
+colnames(env) <- c("SITE","Abstraction","Regulation","Grazing","Fines","Temperature","Conductivity","AvgTurbidity","pH",
+                   "Alkalinity","NitrateNitrite","DRP","N_total","P_total","AvgShading","AvgAlgae","Chl","GrazingRank")
+data_graze <- merge(env,fauna) %>% na.omit()
+corrplot(cor(data_graze %>% select(2:17)), method = 'square')
+```
+
+# Transformation and normalization
+
+Data is centered and log transformed
+
+```{r}
+env <- data_graze %>% select(1:18)
+env_num <- env %>% select(2:17)
+fauna <- data_graze %>% select(19:217)
+```
+
+```{r}
+boxplot(env_num, las=2)
+env_lognorm <- scale(log(env_num+1), scale = FALSE) %>% as.data.frame()
+env[,2:17] <- env_lognorm
+
+boxplot(env_lognorm, las=2)
+```
+
+# CCA analysis
+```{r}
+data_graze[,2:17] <- env_lognorm
+fauna_cca <-  cca(fauna ~ Abstraction + Grazing + Fines + Temperature + Conductivity + 
+                   AvgTurbidity + pH + N_total + P_total + AvgShading + Chl, data = env)
+
+vif.cca(fauna_cca)
+
+
+```
+```{r}
+plot(fauna_cca)
+```
+
+```{r warning=FALSE}
+
+screeplot(fauna_cca,  bstick = TRUE)
+autoplot(fauna_cca, scaling = "sites")
+```
+
+
+
+# ANOVA
+
+```{r}
+anova(fauna_cca)
+```
+
+```{r}
+anova(fauna_cca, by="term")
+```
+
+```{r}
+fauna_cca_2 <- cca(fauna ~ Grazing*Abstraction + Fines + Temperature + Conductivity + 
+                   AvgTurbidity + pH + N_total*P_total + AvgShading + Chl + GrazingRank, data = env)
+```
+
+```{r}
+anova(fauna_cca_2, by="term")
+```
+
+```{r}
+anova(fauna_cca_2, by="mar")
+```
+
+
+
+
+
