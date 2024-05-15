@@ -1,0 +1,147 @@
+---
+title: "Untitled"
+output: html_document
+date: "2024-05-09"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r message=FALSE, warning=FALSE}
+library(readxl)
+library(vegan)
+library(ggplot2)
+library(plotly)
+library(impute)
+library(psych)
+library(ggforce)
+library(rstatix)
+theme_set(theme_bw())
+```
+
+
+# Data loading
+
+```{r}
+df <- read_excel('Sleepy lizard.xlsx')
+```
+
+## Selecting only needed variables
+
+```{r}
+df <- df %>% 
+  select(Treatment, Habitat, Connectivity, Tot_WBC, Het_ABS, Lym_ABS, `H:L Ratio`, Mon_ABS, OthG_ABS, LBSI)
+```
+
+## Assigning correct types
+
+```{r}
+df$Treatment <-  as.factor(df$Treatment)
+df$Habitat <- as.factor(df$Habitat)
+df$Connectivity <-  as.factor(df$Connectivity)
+```
+
+
+# EDA
+
+```{r}
+summary(df)
+```
+```{r}
+df_blood <-  df %>% select(-Treatment, -Habitat, -Connectivity)
+```
+
+```{r}
+boxplot(df_blood, las=2)
+```
+## Transformation and normalization
+
+First I tried centering + scaling, but it appears that scaling is messing with dispersion, so it becomes unequal in gropus (checked later). Final approach is just centering.
+
+```{r}
+df_blood_lognorm <- scale(log(df_blood+1), scale = FALSE)
+boxplot(df_blood_lognorm, las=2)
+```
+
+# PCA
+
+
+```{r}
+pca_df <- prcomp(df_blood_lognorm)$x %>% 
+  as.data.frame() %>%
+  select(PC1, PC2) %>% 
+  mutate(Treatment = df$Treatment,
+         Habitat = df$Habitat)
+```
+
+```{r}
+ggplot(pca_df, aes(x=PC1, y=PC2, shape=Treatment, col=Habitat))+
+  geom_point(size=3)+
+  geom_mark_ellipse(aes(col = Treatment, fill=Treatment))
+```
+
+# perMANOVA
+
+## Checking applicability 
+
+Dispersion is equal in groups by Habitat, by Connectivity and by Treatment.
+
+```{r}
+dist_blood <- vegdist(df_blood_lognorm, method  = "euclidean")
+PCO_blood <- betadisper(dist_blood, df$Habitat)
+plot(PCO_blood)
+anova(PCO_blood)
+```
+```{r}
+dist_blood <- vegdist(df_blood_lognorm, method  = "euclidean")
+PCO_blood <- betadisper(dist_blood, df$Treatment)
+plot(PCO_blood)
+anova(PCO_blood)
+```
+```{r}
+dist_blood <- vegdist(df_blood_lognorm, method  = "euclidean")
+PCO_blood <- betadisper(dist_blood, df$Connectivity)
+plot(PCO_blood)
+anova(PCO_blood)
+```
+
+## Analysis
+
+### Task 1
+
+#### a: Blood composition ~ Treatment
+
+```{r}
+adonis2(df_blood_lognorm ~ df$Treatment, method = "euclidean")
+```
+#### b: Blood composition ~ Habitat
+
+```{r}
+df_modified <- df_blood_lognorm %>% as.data.frame() %>% filter(df$Treatment == 2)
+hab_modified <- subset(df, Treatment == 2)$Habitat
+```
+
+
+```{r}
+adonis2(df_modified ~ hab_modified, method = "euclidean")
+```
+#### c: Blood composition ~ Connectivity
+
+```{r}
+conn_modified <- subset(df, Treatment == 2)$Connectivity
+```
+
+
+```{r}
+adonis2(df_modified ~ conn_modified, method = "euclidean")
+```
+### Task 2
+
+
+```{r}
+adonis2(df_modified ~ conn_modified + hab_modified, method = "euclidean")
+```
+# Conclusion
+
+perMANOVA result show that there is a significant difference in blood composition between lizards from  severely modified and unmodified landscapes. However, there is no significant difference observed in blood composition of lizards from severely modified landscape, both by habitat type and connectivity. It is expected, because PCA analysis revealed that there is observable distance between lizards from different "Treatment" groups, but lizards from all habitat types are clustered together (in modified lanscape group), as differences between them are small.
